@@ -1,0 +1,266 @@
+<html>
+    <head>
+        <title>送付先決定用スクリプト</title>
+        <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+        <script>
+
+        //XorShiftでの疑似乱数
+        class Random {
+            constructor(seed = 88675123) {
+                this.x = 123456789;
+                this.y = 362436069;
+                this.z = 521288629;
+                this.w = seed;
+            }            
+            // XorShift
+            next() {
+                let t;
+                t = this.x ^ (this.x << 11);
+                this.x = this.y; this.y = this.z; this.z = this.w;
+                return this.w = (this.w ^ (this.w >>> 19)) ^ (t ^ (t >>> 8)); 
+            }
+        }
+
+        var random=null;
+        function initializeBtnClick(){
+            //入力シードをコードポイントで数値化する
+            let seedVal = $("#seed").val();
+            let seedStr ='';
+            for (var i = 0, l = seedVal.length; i < l; ++i) {
+                seedStr = seedStr+''+seedVal.codePointAt(i);
+                if(seedStr.length > 18){//最大桁数17桁
+                    seedStr = seedStr.substr(0,17);
+                    break;
+                }
+            }
+            let seed = +seedStr;
+            $("#seedView").text(seed);
+
+            //特定シードを持った疑似乱数を使用する
+            console.log("seed:"+seed);
+            random = new Random(seed);
+            $("#initializeSpan").text("初期化済")
+            $("#seedSpan").text("["+seed+"]")
+        }
+
+        //シュワルツ変換
+        function sortList(list){
+            for (var i = 0, l = list.length; i < l; ++i) {
+                list[i] = [list[i], random.next()];
+            }
+            list.sort(function(a, b){return a[1] - b[1];});
+            for (var i = 0, l = list.length; i < l; ++i) {
+                list[i] = list[i][0];
+            }
+            //console.log(list);
+            return list;
+        }
+
+        function makeMemberList(){
+            let memberText = $("#memberTextArea").val();
+            let memberList = memberText.split(/\n/);
+            //console.log(memberList);
+            $("#nowMember").text(memberList);
+            return memberList;
+        }
+
+        function errMsgSet(errMsg){
+            $("#errMsgSpan").text(errMsg);
+            $("#errMsgDiv").show();
+            $("#resultDiv").hide();
+        }
+
+        function runBtnClick(){
+            //初期化チェック
+            if(random==null){
+                errMsgSet("初期化が行われていません。");
+                return;
+            }
+
+            //メンバー取得
+            let memberList = makeMemberList();
+            if(memberList.length < 3){
+                errMsgSet("メンバーが２名以下です。");
+                return;
+            }
+            //名前
+            let name = ($("#name").val());
+            if(memberList.indexOf(name) ==-1) {
+                errMsgSet("名前がメンバーに存在しません。");
+                return;
+            }
+
+            //送信者 参照渡しになるので再取得
+            let sendList = makeMemberList();
+            //受信者 参照渡しになるので再取得
+            let reciveList = makeMemberList();
+            //結果
+            let resultList={};
+
+            let continueFlg = true;
+            let limit = 10000;
+            let listCnt = sendList.length;
+            while(continueFlg){
+                reciveList = sortList(reciveList);
+                for (var i = 0, l = listCnt; i < l; ++i) {
+                    resultList[sendList[i]]=sendList[i]+"→"+reciveList[i];
+                    if(sendList[i] == reciveList[i]){
+                        resultList=[];
+                        continueFlg = true;
+                        break;
+                    }
+                }
+                
+                if(Object.keys(resultList).length == listCnt){
+                    continueFlg = false;
+                    break;
+                }else{
+                    limit--;
+                    if(limit<0){
+                        console.log("規定回数超過");
+                        break;
+                    }
+                }
+            }
+            /*
+            入力画面は数字だけを受け入れる
+            数字に入力した組み合わせを表示する
+            */
+            if(Object.keys(resultList).length == listCnt){
+                $("#resultSpan").text(resultList[name]);
+                $("#resultDiv").show();
+                $("#errMsgDiv").hide();
+            }else{
+                errMsgSet("規定回数を超過しました。再実行してください。");
+            }
+        }
+
+        //紐づけ
+        $(function() {
+            $('#initializeBtn').on({
+                'click': function() {
+                    initializeBtnClick();
+                }
+            });
+            $('#runBtn').on({
+                'click': function() {
+                    runBtnClick();
+                }
+            });
+            $('#devBtn').on({
+                'click': function() {
+                    $(".forDev").toggle()
+                }
+            });
+            $('#getMemberBtn').on({
+                'click': function() {
+                    makeMemberList()
+                }
+            });
+        });
+        </script>
+
+        <style>
+            /*技術的なこと用*/
+            .forDev{
+                display:none;
+                font-size: 90%;
+            }
+
+            ul li {
+                list-style: none;
+            }
+            li {
+                margin-bottom: 8px;
+            }
+            label{
+                margin-right: 10px;
+                width:80px;
+                float: left;
+            }
+            .topMargin{
+                margin-top: 3px;
+            }
+            #errMsgSpan{
+                color:#ff0000;
+            }
+            #resultDiv{
+                list-style: none;
+                margin-top: 10px;
+                font-size: 110%;
+            }
+            #errMsgSpan{
+                list-style: none;
+                margin-top: 10px;
+                font-size: 110%;
+            }
+        </style>
+    </head>
+
+    <body>
+        <div>
+            <h3>送り先決めるやつ</h3>
+            <div style="margin-bottom: 30px;">
+                合言葉とメンバーリストを入れると送り先をランダムで決めるやつ。<br>
+                自分が誰に送るか、の情報しか表示したくない時に。<br>
+                例：キャラデザ交換するやつ、プレゼント交換　など<br>
+                入力データがどこかに送信されることはありませんが、ネットワーク環境のある所でしか動きません。<br>
+                <div class="forDev">
+                    jqueryの読み込みにgoogleのCDNを使用しているためオフライン非対応。それ以外ローカル処理のみ。
+                </div>
+            </div>
+
+            <h3>使い方</h3>
+            <div style="margin-bottom: 20px;">
+                <ol>
+                    <li>参加メンバーで合言葉を決める。</li>
+                    <li>合言葉を入力し、初期化ボタンを押す。</li>
+                    <li>参加者名を入力</li>
+                    <li>自分の名前を入力し、確認ボタンを押す</li>
+                    <li>自分の相手が表示される</li>
+                    ※「規定回数を超過」と表示された場合は再度確認を行う
+                </ol>
+                <input type="button" id="devBtn" value ="技術的なこと">
+                <div class="forDev topMargin">
+                    <div>
+                        『合言葉』にコードポイント変換を掛けて疑似乱数用のシードを作成。<br>
+                        初期化済表示の[]内にある値がシード値となる。<br>
+                        そのため『合言葉』の言語は問わないが、17桁を超過した時点で切り捨てている。<br>
+                        『合言葉』を変更する際は前部分を変更することを推奨。
+                    </div>
+                </div>
+            </div>
+            <hr>
+            <!--初期化-->
+            <ul>
+                <li>
+                    <span><label for="seed">合言葉</label><input type="text" id="seed" placeholder="合言葉を入力"></span>
+                    <span><input type="button" id="initializeBtn" value ="初期化"></span>
+                    <span id="initializeSpan"></span><span class="forDev" id="seedSpan" style="margin-left: 5px;">シード未定</span>
+                </li>
+
+            <!--メンバー設定-->
+                <li>
+                    <label for="memberTextArea">メンバー</label>
+                    <textarea id="memberTextArea" placeholder="メンバーを１行１人で入力" style="width: 500px;height: 100px;"></textarea>
+                    <div class="forDev topMargin">
+                        <span>現在メンバー：<span id="nowMember">未定</span></span><br>
+                        <span><input type="button" id="getMemberBtn" value ="現在メンバー取得"></span>
+                    </div>
+                </li>
+
+            <!--実行-->
+                <li>
+                    <label for="number">名前</label><input type="text" id="name" placeholder="自分の名前を入力" min="1">
+                    <span><input type="button" id="runBtn" value ="確認"></span>
+                    <div id="resultDiv">
+                        <span id="resultSpan"></span>
+                    </div>
+                    <div id="errMsgDiv">
+                        <span id="errMsgSpan"></span>
+                    </div>
+                </li>
+            </ul>
+        </div>
+    </body>
+</html>
